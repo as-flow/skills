@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 
 JIRA_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
-MAX_WORKSPACE_LEN = 48
+MAX_WORKSPACE_LEN = 32
 
 
 @dataclass
