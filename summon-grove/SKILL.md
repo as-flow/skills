@@ -51,6 +51,11 @@ agents, delete workspaces, replace worktrees, or force cleanup.
 - `scripts/summon_grove.py` creates/reuses the Grove workspace and Herdr tab.
   Run `python3 scripts/summon_grove.py --help` for the exact interface.
 
+## Reference guide
+
+- Read `references/user-guide.md` when the user asks how the Grove + Herdr
+  workflow should be used end-to-end.
+
 ## Troubleshooting
 
 - If `gw` is missing, install Grove first.
