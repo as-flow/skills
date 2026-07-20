@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 
 JIRA_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
-MAX_WORKSPACE_LEN = 96
+MAX_WORKSPACE_LEN = 48
 
 
 @dataclass
@@ -64,7 +64,18 @@ def derive_workspace_name(jira_key: str, title: str) -> str:
         return key_slug
     prefix = f"{key_slug}-"
     available = MAX_WORKSPACE_LEN - len(prefix)
-    trimmed_title = title_slug[:available].rstrip("-")
+    words = title_slug.split("-")
+    trimmed_words: list[str] = []
+    length = 0
+    for word in words:
+        next_length = length + len(word) + (1 if trimmed_words else 0)
+        if next_length > available:
+            break
+        trimmed_words.append(word)
+        length = next_length
+    trimmed_title = "-".join(trimmed_words)
+    if not trimmed_title and available > 0:
+        trimmed_title = title_slug[:available].rstrip("-")
     return f"{prefix}{trimmed_title}" if trimmed_title else key_slug
 
 

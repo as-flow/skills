@@ -41,6 +41,8 @@ agents, delete workspaces, replace worktrees, or force cleanup.
 
 - Workspace and branch names include the Jira key and title slug, for example
   `we-17267-map-llm-gateway-traffic-to-frozen-v1`.
+- Workspace and branch names are capped at 48 characters and truncate the title
+  slug at word boundaries.
 - Existing Grove workspaces are reused, never deleted or replaced.
 - Existing Herdr tabs with the same label are focused, not duplicated.
 - The script records Jira metadata in Grove with `--source-provider jira`,
