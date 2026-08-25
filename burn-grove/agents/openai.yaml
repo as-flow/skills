@@ -1,0 +1,4 @@
+interface:
+  display_name: "Burn Grove"
+  short_description: "Safely remove an issue-linked Grove workspace"
+  default_prompt: "Use $burn-grove to remove the Grove workspace for a full Jira or Linear issue URL."

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create or reuse a Grove workspace for a Jira URL and focus it in Herdr."""
+"""Create or reuse a Grove workspace for an issue URL and focus it in Herdr."""
 
 from __future__ import annotations
 
@@ -16,13 +16,14 @@ from typing import Any
 from urllib.parse import urlparse
 
 
-JIRA_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
+ISSUE_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b", re.IGNORECASE)
 MAX_WORKSPACE_LEN = 32
 
 
 @dataclass
 class Result:
-    jira_key: str
+    provider: str
+    issue_key: str
     title: str
     workspace: str
     branch: str
@@ -41,13 +42,22 @@ def require_command(name: str) -> None:
         raise SystemExit(f"error: required command not found on PATH: {name}")
 
 
-def parse_jira_key(jira_url: str) -> str:
-    parsed = urlparse(jira_url)
+def parse_issue_key(issue_url: str, provider: str) -> str:
+    if provider not in {"jira", "linear"}:
+        raise SystemExit(f"error: unsupported issue provider: {provider}")
+    parsed = urlparse(issue_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise SystemExit("error: --jira-url must be a full http(s) Jira issue URL")
-    match = JIRA_KEY_RE.search(jira_url)
+        raise SystemExit(f"error: --{provider}-url must be a full http(s) issue URL")
+    if provider == "linear":
+        if parsed.netloc.lower() not in {"linear.app", "www.linear.app"}:
+            raise SystemExit("error: --linear-url must use the linear.app host")
+        match = re.search(r"/issue/([A-Z][A-Z0-9]+-\d+)(?:/|$)", parsed.path, re.IGNORECASE)
+    else:
+        if parsed.netloc.lower() in {"linear.app", "www.linear.app"}:
+            raise SystemExit("error: use --linear-url for linear.app issue URLs")
+        match = ISSUE_KEY_RE.search(parsed.path)
     if not match:
-        raise SystemExit("error: could not find a Jira issue key in --jira-url")
+        raise SystemExit(f"error: could not find an issue key in --{provider}-url")
     return match.group(1).upper()
 
 
@@ -57,8 +67,8 @@ def slugify(value: str) -> str:
     return slug
 
 
-def derive_workspace_name(jira_key: str, title: str) -> str:
-    key_slug = jira_key.lower()
+def derive_workspace_name(issue_key: str, title: str) -> str:
+    key_slug = issue_key.lower()
     title_slug = slugify(title)
     if not title_slug:
         return key_slug
@@ -79,19 +89,19 @@ def derive_workspace_name(jira_key: str, title: str) -> str:
     return f"{prefix}{trimmed_title}" if trimmed_title else key_slug
 
 
-def source_title(jira_key: str, title: str) -> str:
-    if jira_key.lower() in title.lower():
+def source_title(issue_key: str, title: str) -> str:
+    if issue_key.lower() in title.lower():
         return title
-    return f"{jira_key}: {title}"
+    return f"{issue_key}: {title}"
 
 
-def fetch_jira_title_with_acli(jira_key: str, warnings: list[str]) -> str:
+def fetch_jira_title_with_acli(issue_key: str, warnings: list[str]) -> str:
     if shutil.which("acli") is None:
         warnings.append("acli not found; using Jira key as title fallback")
-        return jira_key
+        return issue_key
     try:
         proc = run(
-            ["acli", "jira", "workitem", "view", jira_key, "--fields", "summary", "--json"],
+            ["acli", "jira", "workitem", "view", issue_key, "--fields", "summary", "--json"],
             check=True,
         )
         payload = json.loads(proc.stdout)
@@ -101,7 +111,13 @@ def fetch_jira_title_with_acli(jira_key: str, warnings: list[str]) -> str:
         warnings.append("acli returned no Jira summary; using Jira key as title fallback")
     except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         warnings.append(f"could not fetch Jira summary with acli: {exc}")
-    return jira_key
+    return issue_key
+
+
+def issue_source(args: argparse.Namespace) -> tuple[str, str]:
+    if args.linear_url:
+        return "linear", args.linear_url
+    return "jira", args.jira_url
 
 
 def json_from(cmd: list[str]) -> dict[str, Any] | None:
@@ -129,8 +145,9 @@ def create_workspace(
     workspace: str,
     branch: str,
     preset: str,
-    jira_url: str,
-    jira_key: str,
+    provider: str,
+    issue_url: str,
+    issue_key: str,
     title: str,
 ) -> str:
     cmd = [
@@ -142,11 +159,11 @@ def create_workspace(
         "--branch",
         branch,
         "--source-provider",
-        "jira",
+        provider,
         "--source-url",
-        jira_url,
+        issue_url,
         "--source-ref",
-        jira_key,
+        issue_key,
         "--source-title",
         title,
     ]
@@ -193,14 +210,21 @@ def summon(args: argparse.Namespace) -> Result:
     require_command("gw")
     require_command("herdr")
 
-    jira_key = parse_jira_key(args.jira_url)
-    title = args.title.strip() if args.title else fetch_jira_title_with_acli(jira_key, warnings)
-    source = source_title(jira_key, title)
-    workspace = derive_workspace_name(jira_key, title)
+    provider, issue_url = issue_source(args)
+    issue_key = parse_issue_key(issue_url, provider)
+    if args.title:
+        title = args.title.strip()
+    elif provider == "jira":
+        title = fetch_jira_title_with_acli(issue_key, warnings)
+    else:
+        warnings.append("Linear title not supplied; using issue key as title fallback")
+        title = issue_key
+    source = source_title(issue_key, title)
+    workspace = derive_workspace_name(issue_key, title)
     branch = workspace
 
     if args.dry_run:
-        return Result(jira_key, source, workspace, branch, "", "dry-run", "dry-run", warnings)
+        return Result(provider, issue_key, source, workspace, branch, "", "dry-run", "dry-run", warnings)
 
     path = workspace_path(workspace)
     if path:
@@ -210,19 +234,31 @@ def summon(args: argparse.Namespace) -> Result:
             workspace=workspace,
             branch=branch,
             preset=args.preset,
-            jira_url=args.jira_url,
-            jira_key=jira_key,
+            provider=provider,
+            issue_url=issue_url,
+            issue_key=issue_key,
             title=source,
         )
         workspace_action = "created"
 
     tab_action = focus_or_create_tab(workspace, path, warnings)
-    return Result(jira_key, source, workspace, branch, path, workspace_action, tab_action, warnings)
+    return Result(
+        provider,
+        issue_key,
+        source,
+        workspace,
+        branch,
+        path,
+        workspace_action,
+        tab_action,
+        warnings,
+    )
 
 
 def print_result(result: Result, *, as_json: bool) -> None:
     payload = {
-        "jira_key": result.jira_key,
+        "provider": result.provider,
+        "issue_key": result.issue_key,
         "title": result.title,
         "workspace": result.workspace,
         "branch": result.branch,
@@ -231,6 +267,8 @@ def print_result(result: Result, *, as_json: bool) -> None:
         "tab_action": result.tab_action,
         "warnings": result.warnings,
     }
+    if result.provider == "jira":
+        payload["jira_key"] = result.issue_key
     if as_json:
         print(json.dumps(payload, indent=2))
         return
@@ -246,11 +284,13 @@ def print_result(result: Result, *, as_json: bool) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Create or reuse a Grove workspace from a Jira URL and focus it in Herdr.",
+        description="Create or reuse a Grove workspace from a Jira or Linear URL and focus it in Herdr.",
     )
-    parser.add_argument("--jira-url", required=True, help="Full Jira issue URL")
+    urls = parser.add_mutually_exclusive_group(required=True)
+    urls.add_argument("--jira-url", help="Full Jira issue URL")
+    urls.add_argument("--linear-url", help="Full Linear issue URL")
     parser.add_argument("--preset", required=True, help="Grove preset name")
-    parser.add_argument("--title", default="", help="Jira issue title/summary")
+    parser.add_argument("--title", default="", help="Issue title/summary")
     parser.add_argument("--dry-run", action="store_true", help="Derive names without creating anything")
     parser.add_argument("--json", action="store_true", help="Print structured JSON output")
     return parser

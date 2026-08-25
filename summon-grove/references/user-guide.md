@@ -63,20 +63,25 @@ herdr
 
 ## Start a task
 
-Invoke the skill with a Jira URL and a Grove preset:
+Invoke the skill with a Jira or Linear URL and a Grove preset:
 
 ```text
 /summon-grove https://your-domain.atlassian.net/browse/ENG-123 backend
 ```
 
+```text
+/summon-grove https://linear.app/your-workspace/issue/ENG-123/short-title backend
+```
+
 The skill will:
 
-1. Read the Jira issue key from the URL.
-2. Fetch the issue title through the agent's Jira tools when available, or let
-   the bundled script fall back to `acli`.
+1. Detect Jira or Linear and read the issue key from the URL.
+2. Fetch the title through the provider's MCP tools. Jira can fall back to
+   `acli`; Linear falls back to the issue key when no title is supplied.
 3. Derive a workspace and branch name like
    `eng-123-short-ticket-title`.
-4. Reuse an existing Grove workspace with that name, or create one with:
+4. Reuse an existing Grove workspace with that name, or create one with the
+   matching source provider. For Jira:
 
    ```bash
    gw create eng-123-short-ticket-title \
@@ -87,6 +92,9 @@ The skill will:
      --source-ref ENG-123 \
      --source-title "ENG-123: Short ticket title"
    ```
+
+   Linear uses the same command shape with `--source-provider linear` and its
+   Linear source URL.
 
 5. Reuse or create a Herdr tab labeled with the workspace name and rooted at
    the Grove workspace path.
@@ -176,7 +184,7 @@ separate operations on purpose.
 
 ## Safety rules
 
-- Use a Jira URL, not a bare issue key.
+- Use a Jira or Linear issue URL, not a bare issue key.
 - Keep presets small enough to match a real task slice.
 - Reuse existing workspaces instead of replacing them.
 - Do not force-delete workspaces with unreviewed changes.
@@ -186,7 +194,8 @@ separate operations on purpose.
 ## Troubleshooting
 
 - **Preset not found**: run `gw preset list`, then rerun with an existing preset.
-- **Jira title missing**: authenticate the agent's Jira integration or `acli`.
+- **Issue title missing**: authenticate the matching Jira or Linear MCP. Jira
+  can also use `acli`.
 - **Herdr tab not created**: start Herdr once with `herdr`, then rerun the
   summon command.
 - **Wrong directory**: run `gw go <workspace>` from any shell to jump back to

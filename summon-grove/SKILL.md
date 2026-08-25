@@ -1,8 +1,7 @@
 ---
 name: summon-grove
-description: Create or reuse a Grove multi-repo workspace from a Jira URL and Grove preset, then open or focus a matching Herdr tab. Use when the user invokes /summon-grove or asks to summon a Grove workspace for a Jira ticket.
+description: Create or reuse a Grove multi-repo workspace from a Jira or Linear issue URL and Grove preset, then open or focus a matching Herdr tab. Use when the user invokes /summon-grove or asks to summon a Grove workspace for an issue.
 license: MIT
-compatibility: Requires git, Python 3, Grove gw, Herdr, and Jira access through the agent's Jira tools or acli.
 ---
 
 # Summon Grove
@@ -10,43 +9,47 @@ compatibility: Requires git, Python 3, Grove gw, Herdr, and Jira access through 
 Use this skill when the user invokes:
 
 ```text
-/summon-grove <jira-url> <grove-preset>
+/summon-grove <jira-or-linear-url> <grove-preset>
 ```
 
-The command creates or reuses a Grove workspace for the Jira issue, then opens
+The command creates or reuses a Grove workspace for the issue, then opens
 or focuses a Herdr tab rooted at that workspace. It must not launch coding
 agents, delete workspaces, replace worktrees, or force cleanup.
 
 ## Workflow
 
 1. Parse exactly two arguments:
-   - `jira-url`: a full Jira issue URL, not a bare ticket key.
+   - Issue URL: a full Jira or `linear.app` issue URL, not a bare issue key.
    - `grove-preset`: an existing Grove preset name.
-2. Extract the Jira key from the URL.
-3. Fetch the Jira issue summary:
-   - Prefer the agent's native Jira/MCP tools when available.
-   - If native tools are unavailable, omit the title and let the script try
-     `acli jira workitem view`.
+2. Identify the provider and extract the issue key from the URL.
+3. Fetch the issue title with the provider's native MCP tool:
+   - For Jira, use the agent's Jira tools; if unavailable, omit the title and
+     let the script try `acli jira workitem view`.
+   - For Linear, use Linear's exact issue lookup with the extracted key. If it
+     is unavailable, omit the title and let the script use the key.
 4. From this skill directory, run:
 
    ```bash
-   python3 scripts/summon_grove.py --jira-url "<jira-url>" --preset "<grove-preset>" --title "<jira summary>"
+   python3 scripts/summon_grove.py --jira-url "<jira-url>" --preset "<grove-preset>" --title "<issue title>"
    ```
 
-   If you could not fetch a title, omit `--title`.
+   For Linear, use `--linear-url "<linear-url>"` instead of `--jira-url`.
+   Exactly one URL flag is required. If you could not fetch a title, omit
+   `--title`.
 5. Report the workspace name, workspace path, and whether the workspace/tab was
    created or reused.
 
 ## Guarantees
 
-- Workspace and branch names include the Jira key and title slug, for example
+- Workspace and branch names include the issue key and title slug, for example
   `we-17267-map-llm-gateway-traffic-to-frozen-v1`.
 - Workspace and branch names are capped at 32 characters and truncate the title
   slug at word boundaries.
 - Existing Grove workspaces are reused, never deleted or replaced.
 - Existing Herdr tabs with the same label are focused, not duplicated.
-- The script records Jira metadata in Grove with `--source-provider jira`,
-  `--source-url`, `--source-ref`, and `--source-title`.
+- The script records exact provider metadata in Grove using
+  `--source-provider jira|linear`, `--source-url`, `--source-ref`, and
+  `--source-title`.
 
 ## Available script
 
@@ -62,5 +65,6 @@ agents, delete workspaces, replace worktrees, or force cleanup.
 
 - If `gw` is missing, install Grove first.
 - If `herdr tab create` fails, start Herdr in a terminal and rerun the command.
-- If Jira title lookup fails, authenticate the agent's Jira tools or `acli`.
+- If title lookup fails, authenticate the matching Jira or Linear MCP. Jira can
+  also fall back to `acli`.
 - If the preset is missing, list presets with `gw preset list`.
