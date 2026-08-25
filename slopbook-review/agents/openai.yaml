@@ -1,0 +1,6 @@
+interface:
+  display_name: "Slopbook Review"
+  short_description: "Review a PR against its Slopbook spec"
+  default_prompt: "Use $slopbook-review to review this PR against its Slopbook spec."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "To Slopbook"
+  short_description: "Create a temporary PR summary spec"
+  default_prompt: "Use $to-slopbook to create a temporary summary spec for this PR."
+policy:
+  allow_implicit_invocation: false
